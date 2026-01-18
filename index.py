@@ -184,13 +184,6 @@ HTML_TEMPLATE = """
         <!-- BILLING TAB -->
         <div id="billing" class="tab-content active">
             <div class="card">
-                <h2>Customer Details</h2>
-                <input class="input" id="customerName" placeholder="Customer Name *" required>
-                <input class="input" id="phone" placeholder="Phone Number">
-                <input class="input" id="vehicleNo" placeholder="Vehicle Number">
-            </div>
-
-            <div class="card">
                 <h2>Select Services</h2>
                 <div class="service-grid" id="serviceGrid"></div>
             </div>
@@ -251,7 +244,6 @@ HTML_TEMPLATE = """
                         <tr>
                             <th>Bill No</th>
                             <th>Date</th>
-                            <th>Customer</th>
                             <th>Total</th>
                             <th>Actions</th>
                         </tr>
@@ -340,20 +332,13 @@ HTML_TEMPLATE = """
         }
 
         async function generateBill() {
-            const customerName = document.getElementById('customerName').value.trim();
-            const phone = document.getElementById('phone').value.trim();
-            const vehicleNo = document.getElementById('vehicleNo').value.trim();
-
-            if (!customerName || selectedServices.length === 0) {
-                alert('Please enter customer name and add at least one service');
+            if (selectedServices.length === 0) {
+                alert('Please add at least one service');
                 return;
             }
 
             const total = selectedServices.reduce((sum, s) => sum + s.price, 0);
             const billData = {
-                customerName,
-                phone,
-                vehicleNo,
                 services: selectedServices,
                 total
             };
@@ -372,39 +357,37 @@ HTML_TEMPLATE = """
             const preview = document.getElementById('billPreview');
             preview.innerHTML = `
                 <div style="text-align: center; margin-bottom: 30px;">
-                    <h1 style="margin: 0;">JEENU MOTORS</h1>
-                    <p>Three Wheeler Repair Shop</p>
-                    <hr style="margin: 20px 0;">
+                    <h1 style="margin: 0; font-size: 2.5em;">JEENU MOTORS</h1>
+                    <p style="margin: 5px 0;">Three Wheeler Repair Shop</p>
+                    <p style="margin: 5px 0;">No 9, St Andrews Drive, Nuwara Eliya</p>
+                    <p style="margin: 5px 0;">Tel: 0743040294</p>
+                    <hr style="margin: 20px 0; border: 2px solid #000;">
                 </div>
                 <p><strong>Bill No:</strong> ${bill.billNo}</p>
                 <p><strong>Date:</strong> ${new Date(bill.createdAt).toLocaleString()}</p>
-                <hr style="margin: 20px 0;">
-                <p><strong>Customer:</strong> ${bill.customerName}</p>
-                <p><strong>Phone:</strong> ${bill.phone || '-'}</p>
-                <p><strong>Vehicle:</strong> ${bill.vehicleNo || '-'}</p>
                 <hr style="margin: 20px 0;">
                 <h3>Services:</h3>
                 <table style="width: 100%; margin-top: 10px;">
                     <thead>
                         <tr>
-                            <th>Service</th>
-                            <th style="text-align: right;">Amount</th>
+                            <th style="border-bottom: 2px solid #000;">Service</th>
+                            <th style="text-align: right; border-bottom: 2px solid #000;">Amount</th>
                         </tr>
                     </thead>
                     <tbody>
                         ${bill.services.map(s => `
                             <tr>
-                                <td>${s.name}</td>
-                                <td style="text-align: right;">₹${s.price.toFixed(2)}</td>
+                                <td style="padding: 8px 0;">${s.name}</td>
+                                <td style="text-align: right; padding: 8px 0;">₹${s.price.toFixed(2)}</td>
                             </tr>
                         `).join('')}
                     </tbody>
                 </table>
-                <hr style="margin: 20px 0;">
-                <h2 style="text-align: right;">Total: ₹${bill.total.toFixed(2)}</h2>
+                <hr style="margin: 20px 0; border: 2px solid #000;">
+                <h2 style="text-align: right; font-size: 1.8em;">Total: ₹${bill.total.toFixed(2)}</h2>
                 <div style="text-align: center; margin-top: 40px;">
-                    <p>Thank you for your business!</p>
-                    <p>Visit Again!</p>
+                    <p style="font-size: 1.1em;">Thank you for your business!</p>
+                    <p style="font-size: 1.1em;">Visit Again!</p>
                 </div>
             `;
             document.getElementById('billPreviewSection').style.display = 'block';
@@ -413,9 +396,6 @@ HTML_TEMPLATE = """
         }
 
         function resetBilling() {
-            document.getElementById('customerName').value = '';
-            document.getElementById('phone').value = '';
-            document.getElementById('vehicleNo').value = '';
             selectedServices = [];
             renderSelectedServices();
             document.getElementById('billPreviewSection').style.display = 'none';
@@ -507,7 +487,6 @@ HTML_TEMPLATE = """
                 <tr>
                     <td>${b.billNo}</td>
                     <td>${new Date(b.createdAt).toLocaleDateString()}</td>
-                    <td>${b.customerName}</td>
                     <td>₹${b.total.toFixed(2)}</td>
                     <td>
                         <button class="btn btn-primary" onclick='viewBill(${JSON.stringify(b).replace(/'/g, "&apos;")})'>View</button>
@@ -587,9 +566,6 @@ def bills():
         
         bill = {
             'billNo': bill_no,
-            'customerName': data['customerName'],
-            'phone': data.get('phone', ''),
-            'vehicleNo': data.get('vehicleNo', ''),
             'services': data['services'],
             'total': float(data['total']),
             'createdAt': datetime.now()
