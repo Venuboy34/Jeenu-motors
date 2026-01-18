@@ -179,6 +179,7 @@ HTML_TEMPLATE = """
             <button class="tab-btn active" onclick="showTab('billing')">Create Bill</button>
             <button class="tab-btn" onclick="showTab('services')">Manage Services</button>
             <button class="tab-btn" onclick="showTab('bills')">View Bills</button>
+            <button class="tab-btn" onclick="showTab('dashboard')">Today's Summary</button>
         </div>
 
         <!-- BILLING TAB -->
@@ -252,6 +253,38 @@ HTML_TEMPLATE = """
                 </table>
             </div>
         </div>
+
+        <!-- DASHBOARD TAB -->
+        <div id="dashboard" class="tab-content">
+            <div class="card">
+                <h2>📊 Today's Summary</h2>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; margin-top: 20px;">
+                    <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; border-radius: 10px; text-align: center;">
+                        <h3 style="margin: 0; font-size: 1.2em; opacity: 0.9;">Total Bills</h3>
+                        <p style="margin: 10px 0 0 0; font-size: 3em; font-weight: bold;" id="todayBillCount">0</p>
+                    </div>
+                    <div style="background: linear-gradient(135deg, #48bb78 0%, #38a169 100%); color: white; padding: 30px; border-radius: 10px; text-align: center;">
+                        <h3 style="margin: 0; font-size: 1.2em; opacity: 0.9;">Total Revenue</h3>
+                        <p style="margin: 10px 0 0 0; font-size: 3em; font-weight: bold;">Rs. <span id="todayRevenue">0.00</span></p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h2>📅 Today's Bills</h2>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Bill No</th>
+                            <th>Time</th>
+                            <th>Total</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="todayBillsTable"></tbody>
+                </table>
+            </div>
+        </div>
     </div>
 
     <script>
@@ -269,6 +302,7 @@ HTML_TEMPLATE = """
             if (tabName === 'billing') loadServices();
             if (tabName === 'services') loadAllServices();
             if (tabName === 'bills') loadBills();
+            if (tabName === 'dashboard') loadDashboard();
         }
 
         // Load services for billing
@@ -511,6 +545,27 @@ HTML_TEMPLATE = """
             displayBill(bill);
         }
 
+        // Dashboard
+        async function loadDashboard() {
+            const res = await fetch('/api/dashboard');
+            const data = await res.json();
+            
+            document.getElementById('todayBillCount').textContent = data.todayBillCount;
+            document.getElementById('todayRevenue').textContent = data.todayRevenue.toFixed(2);
+            
+            const tbody = document.getElementById('todayBillsTable');
+            tbody.innerHTML = data.todayBills.map(b => `
+                <tr>
+                    <td>${b.billNo}</td>
+                    <td>${new Date(b.createdAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })}</td>
+                    <td>Rs. ${b.total.toFixed(2)}</td>
+                    <td>
+                        <button class="btn btn-primary" onclick='viewBill(${JSON.stringify(b).replace(/'/g, "&apos;")})'>View</button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
         // Load initial services
         loadServices();
     </script>
@@ -591,6 +646,34 @@ def bills():
         for bill in bills:
             bill['_id'] = str(bill['_id'])
         return jsonify(bills)
+
+@app.route('/api/dashboard', methods=['GET'])
+def dashboard():
+    # Get today's date range
+    today_start = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    today_end = datetime.now().replace(hour=23, minute=59, second=59, microsecond=999999)
+    
+    # Get today's bills
+    today_bills = list(db.bills.find({
+        'createdAt': {
+            '$gte': today_start,
+            '$lte': today_end
+        }
+    }).sort('createdAt', -1))
+    
+    # Calculate totals
+    bill_count = len(today_bills)
+    total_revenue = sum(bill['total'] for bill in today_bills)
+    
+    # Convert ObjectId to string
+    for bill in today_bills:
+        bill['_id'] = str(bill['_id'])
+    
+    return jsonify({
+        'todayBillCount': bill_count,
+        'todayRevenue': total_revenue,
+        'todayBills': today_bills
+    })
 
 # Vercel serverless function handler
 app.debug = False
