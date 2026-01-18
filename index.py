@@ -191,7 +191,7 @@ HTML_TEMPLATE = """
             <div class="card">
                 <h2>Selected Services</h2>
                 <div id="selectedServices"></div>
-                <h3 style="text-align: right; margin-top: 20px;">Total: ₹<span id="totalAmount">0.00</span></h3>
+                <h3 style="text-align: right; margin-top: 20px;">Total: Rs. <span id="totalAmount">0.00</span></h3>
                 <button class="btn btn-success" onclick="generateBill()" style="width: 100%; font-size: 1.2em; margin-top: 10px;">
                     Generate Bill
                 </button>
@@ -212,7 +212,7 @@ HTML_TEMPLATE = """
                 <h2 id="serviceFormTitle">Add New Service</h2>
                 <form id="serviceForm" onsubmit="saveService(event)">
                     <input class="input" id="serviceName" placeholder="Service Name *" required>
-                    <input class="input" type="number" step="0.01" id="servicePrice" placeholder="Default Price (₹) *" required>
+                    <input class="input" type="number" step="0.01" id="servicePrice" placeholder="Default Price (Rs.) *" required>
                     <input class="input" id="serviceImage" placeholder="Image URL (optional)">
                     <button class="btn btn-primary" type="submit">Add Service</button>
                     <button class="btn btn-secondary" type="button" onclick="cancelEdit()" id="cancelBtn" style="display: none;">Cancel</button>
@@ -284,7 +284,7 @@ HTML_TEMPLATE = """
                 <div class="service-card" onclick='addServiceToBill(${JSON.stringify(s).replace(/'/g, "&apos;")})'>
                     ${s.image ? `<img src="${s.image}" class="service-img" alt="${s.name}">` : '<div class="service-img"></div>'}
                     <h3>${s.name}</h3>
-                    <p style="color: #667eea; font-weight: bold;">₹${s.defaultPrice}</p>
+                    <p style="color: #667eea; font-weight: bold;">Rs. ${s.defaultPrice.toFixed(2)}</p>
                 </div>
             `).join('');
         }
@@ -354,6 +354,10 @@ HTML_TEMPLATE = """
         }
 
         function displayBill(bill) {
+            const billDate = new Date(bill.createdAt);
+            const date = billDate.toLocaleDateString('en-GB');
+            const time = billDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+            
             const preview = document.getElementById('billPreview');
             preview.innerHTML = `
                 <div style="text-align: center; margin-bottom: 30px;">
@@ -363,28 +367,31 @@ HTML_TEMPLATE = """
                     <p style="margin: 5px 0;">Tel: 0743040294</p>
                     <hr style="margin: 20px 0; border: 2px solid #000;">
                 </div>
-                <p><strong>Bill No:</strong> ${bill.billNo}</p>
-                <p><strong>Date:</strong> ${new Date(bill.createdAt).toLocaleString()}</p>
+                <div style="margin-bottom: 20px;">
+                    <p style="margin: 5px 0;"><strong>Bill No:</strong> ${bill.billNo}</p>
+                    <p style="margin: 5px 0;"><strong>Date:</strong> ${date}</p>
+                    <p style="margin: 5px 0;"><strong>Time:</strong> ${time}</p>
+                </div>
                 <hr style="margin: 20px 0;">
                 <h3>Services:</h3>
                 <table style="width: 100%; margin-top: 10px;">
                     <thead>
                         <tr>
                             <th style="border-bottom: 2px solid #000;">Service</th>
-                            <th style="text-align: right; border-bottom: 2px solid #000;">Amount</th>
+                            <th style="text-align: right; border-bottom: 2px solid #000;">Amount (Rs.)</th>
                         </tr>
                     </thead>
                     <tbody>
                         ${bill.services.map(s => `
                             <tr>
                                 <td style="padding: 8px 0;">${s.name}</td>
-                                <td style="text-align: right; padding: 8px 0;">₹${s.price.toFixed(2)}</td>
+                                <td style="text-align: right; padding: 8px 0;">Rs. ${s.price.toFixed(2)}</td>
                             </tr>
                         `).join('')}
                     </tbody>
                 </table>
                 <hr style="margin: 20px 0; border: 2px solid #000;">
-                <h2 style="text-align: right; font-size: 1.8em;">Total: ₹${bill.total.toFixed(2)}</h2>
+                <h2 style="text-align: right; font-size: 1.8em;">Total: Rs. ${bill.total.toFixed(2)}</h2>
                 <div style="text-align: center; margin-top: 40px;">
                     <p style="font-size: 1.1em;">Thank you for your business!</p>
                     <p style="font-size: 1.1em;">Visit Again!</p>
@@ -392,7 +399,10 @@ HTML_TEMPLATE = """
             `;
             document.getElementById('billPreviewSection').style.display = 'block';
             document.querySelector('.tabs').style.display = 'none';
-            document.querySelector('[id="billing"] .card').forEach(c => c.style.display = 'none');
+            document.querySelectorAll('#billing > .card').forEach(c => c.style.display = 'none');
+            
+            // Scroll to bill
+            document.getElementById('billPreviewSection').scrollIntoView({ behavior: 'smooth' });
         }
 
         function resetBilling() {
@@ -400,7 +410,8 @@ HTML_TEMPLATE = """
             renderSelectedServices();
             document.getElementById('billPreviewSection').style.display = 'none';
             document.querySelector('.tabs').style.display = 'flex';
-            document.querySelectorAll('[id="billing"] .card').forEach(c => c.style.display = 'block');
+            document.querySelectorAll('#billing > .card').forEach(c => c.style.display = 'block');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
         }
 
         // Service Management
@@ -415,7 +426,7 @@ HTML_TEMPLATE = """
             tbody.innerHTML = services.map(s => `
                 <tr>
                     <td>${s.name}</td>
-                    <td>₹${s.defaultPrice}</td>
+                    <td>Rs. ${s.defaultPrice.toFixed(2)}</td>
                     <td>${s.image ? `<img src="${s.image}" class="img-preview">` : '-'}</td>
                     <td>
                         <button class="btn btn-primary" onclick='editService(${JSON.stringify(s).replace(/'/g, "&apos;")})'>Edit</button>
@@ -486,8 +497,8 @@ HTML_TEMPLATE = """
             tbody.innerHTML = bills.map(b => `
                 <tr>
                     <td>${b.billNo}</td>
-                    <td>${new Date(b.createdAt).toLocaleDateString()}</td>
-                    <td>₹${b.total.toFixed(2)}</td>
+                    <td>${new Date(b.createdAt).toLocaleDateString('en-GB')}</td>
+                    <td>Rs. ${b.total.toFixed(2)}</td>
                     <td>
                         <button class="btn btn-primary" onclick='viewBill(${JSON.stringify(b).replace(/'/g, "&apos;")})'>View</button>
                     </td>
