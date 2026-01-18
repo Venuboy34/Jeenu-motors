@@ -1,6 +1,6 @@
 from flask import Flask, render_template_string, request, jsonify, send_file
 from pymongo import MongoClient
-from datetime import datetime
+from datetime import datetime, timedelta
 from bson import ObjectId
 import os
 import json
@@ -268,6 +268,11 @@ HTML_TEMPLATE = """
                         <p style="margin: 10px 0 0 0; font-size: 3em; font-weight: bold;">Rs. <span id="todayRevenue">0.00</span></p>
                     </div>
                 </div>
+                <div style="text-align: center; margin-top: 20px;">
+                    <button class="btn btn-danger" onclick="resetTodaySummary()" style="font-size: 1.1em;">
+                        🔄 Reset Today's Summary
+                    </button>
+                </div>
             </div>
 
             <div class="card">
@@ -282,6 +287,20 @@ HTML_TEMPLATE = """
                         </tr>
                     </thead>
                     <tbody id="todayBillsTable"></tbody>
+                </table>
+            </div>
+
+            <div class="card">
+                <h2>📈 Last 2 Weeks Revenue</h2>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Bills</th>
+                            <th>Revenue</th>
+                        </tr>
+                    </thead>
+                    <tbody id="weeklyRevenueTable"></tbody>
                 </table>
             </div>
         </div>
@@ -564,6 +583,27 @@ HTML_TEMPLATE = """
                     </td>
                 </tr>
             `).join('');
+
+            // Render weekly revenue
+            const weeklyTbody = document.getElementById('weeklyRevenueTable');
+            weeklyTbody.innerHTML = data.weeklyRevenue.map(day => `
+                <tr>
+                    <td>${new Date(day.date).toLocaleDateString('en-GB')}</td>
+                    <td>${day.billCount}</td>
+                    <td>Rs. ${day.revenue.toFixed(2)}</td>
+                </tr>
+            `).join('');
+        }
+
+        async function resetTodaySummary() {
+            if (confirm('Are you sure you want to reset today\'s summary? This will archive today\'s data and start fresh.')) {
+                const res = await fetch('/api/reset-today', { method: 'POST' });
+                const result = await res.json();
+                if (result.success) {
+                    alert('Today\'s summary has been reset! Data saved to history.');
+                    loadDashboard();
+                }
+            }
         }
 
         // Load initial services
@@ -669,11 +709,77 @@ def dashboard():
     for bill in today_bills:
         bill['_id'] = str(bill['_id'])
     
+    # Get last 2 weeks revenue from daily_summary
+    two_weeks_ago = datetime.now() - timedelta(days=14)
+    weekly_data = list(db.daily_summary.find({
+        'date': {'$gte': two_weeks_ago}
+    }).sort('date', -1))
+    
+    weekly_revenue = [{
+        'date': day['date'].isoformat(),
+        'billCount': day['billCount'],
+        'revenue': day['revenue']
+    } for day in weekly_data]
+    
     return jsonify({
         'todayBillCount': bill_count,
         'todayRevenue': total_revenue,
-        'todayBills': today_bills
+        'todayBills': today_bills,
+        'weeklyRevenue': weekly_revenue
     })
+
+@app.route('/api/reset-today', methods=['POST'])
+def reset_today():
+    # Get today's date
+    today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    today_end = datetime.now().replace(hour=23, minute=59, second=59, microsecond=999999)
+    
+    # Get today's bills
+    today_bills = list(db.bills.find({
+        'createdAt': {
+            '$gte': today,
+            '$lte': today_end
+        }
+    }))
+    
+    if today_bills:
+        # Calculate totals
+        bill_count = len(today_bills)
+        total_revenue = sum(bill['total'] for bill in today_bills)
+        
+        # Save to daily_summary
+        db.daily_summary.update_one(
+            {'date': today},
+            {
+                '$set': {
+                    'date': today,
+                    'billCount': bill_count,
+                    'revenue': total_revenue,
+                    'archivedAt': datetime.now()
+                }
+            },
+            upsert=True
+        )
+        
+        # Mark bills as archived
+        db.bills.update_many(
+            {
+                'createdAt': {
+                    '$gte': today,
+                    '$lte': today_end
+                }
+            },
+            {
+                '$set': {'archived': True}
+            }
+        )
+    
+    # Clean up old data (older than 2 weeks)
+    two_weeks_ago = datetime.now() - timedelta(days=14)
+    db.daily_summary.delete_many({'date': {'$lt': two_weeks_ago}})
+    db.bills.delete_many({'archived': True, 'createdAt': {'$lt': two_weeks_ago}})
+    
+    return jsonify({'success': True})
 
 # Vercel serverless function handler
 app.debug = False
